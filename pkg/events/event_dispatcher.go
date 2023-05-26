@@ -33,3 +33,25 @@ func (ed *EventDispatcher) Register(name string, handler EventHandlerInterface) 
 	return nil
 
 }
+
+func (ed *EventDispatcher) Clear() error {
+
+	ed.handlers = make(map[string][]EventHandlerInterface)
+
+	return nil
+}
+
+func (ed *EventDispatcher) Has(name string, handler EventHandlerInterface) bool {
+
+	for e, h := range ed.handlers {
+		if e == name {
+			for _, h2 := range h {
+				if h2 == handler {
+					return true
+				}
+			}
+		}
+	}
+
+	return false
+}
