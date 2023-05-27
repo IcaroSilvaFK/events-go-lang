@@ -1,10 +1,11 @@
 package events
 
 import (
+	"sync"
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -39,7 +40,8 @@ func (e *TestEvent) GetDateTime() time.Time {
 	return time.Now()
 }
 
-func (h *TestEventHandler) Handle(event EventInterface) error {
+func (h *TestEventHandler) Handle(event EventInterface, wg *sync.WaitGroup) error {
+	defer wg.Done()
 	return nil
 }
 
@@ -75,17 +77,17 @@ func (s *EventDispatcherTestSuite) TestEventDispatcher_Register() {
 
 	err := s.dispatcher.Register(s.event.GetName(), &s.handler)
 
-	assert.Nil(s.T(), err)
+	s.Nil(err)
 
 	s.Equal(1, len(s.dispatcher.handlers[s.event.GetName()]))
 
 	err = s.dispatcher.Register(s.event.GetName(), &s.handler2)
 
-	assert.Nil(s.T(), err)
+	s.Nil(err)
 	s.Equal(2, len(s.dispatcher.handlers[s.event.GetName()]))
 
-	assert.Equal(s.T(), &s.handler, s.dispatcher.handlers[s.event.GetName()][0])
-	assert.Equal(s.T(), &s.handler2, s.dispatcher.handlers[s.event.GetName()][1])
+	s.Equal(&s.handler, s.dispatcher.handlers[s.event.GetName()][0])
+	s.Equal(&s.handler2, s.dispatcher.handlers[s.event.GetName()][1])
 }
 
 func (s *EventDispatcherTestSuite) TestEventDispatcher_Register_WithSameHandler() {
@@ -134,4 +136,41 @@ func (s *EventDispatcherTestSuite) TestEventDispatcher_Has() {
 
 	s.True(s.dispatcher.Has(s.event.GetName(), &s.handler))
 	s.True(s.dispatcher.Has(s.event.GetName(), &s.handler2))
+}
+
+type MockHandler struct {
+	mock.Mock
+}
+
+func (m *MockHandler) Handle(event EventInterface, wg *sync.WaitGroup) error {
+	m.Called(event)
+	wg.Done()
+	return nil
+}
+
+func (s *EventDispatcherTestSuite) TestEventDispatch_Dispatch() {
+
+	eh := &MockHandler{}
+	eh.On("Handle", &s.event)
+
+	s.dispatcher.Register(s.event.GetName(), eh)
+
+	err := s.dispatcher.Dispatch(&s.event)
+
+	s.Nil(err)
+	eh.AssertExpectations(s.T())
+	eh.AssertNumberOfCalls(s.T(), "Handle", 1)
+
+}
+
+func (s *EventDispatcherTestSuite) TestEventDispatch_Remove() {
+
+	s.dispatcher.Register(s.event.GetName(), &s.handler)
+	s.dispatcher.Register(s.event.GetName(), &s.handler2)
+	s.dispatcher.Register(s.event.GetName(), &s.handler3)
+
+	s.dispatcher.Remove(s.event.GetName(), &s.handler)
+
+	s.Equal(2, len(s.dispatcher.handlers[s.event.GetName()]))
+	s.False(s.dispatcher.Has(s.event.GetName(), &s.handler))
 }

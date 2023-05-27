@@ -2,6 +2,7 @@ package events
 
 import (
 	"errors"
+	"sync"
 )
 
 var (
@@ -43,15 +44,41 @@ func (ed *EventDispatcher) Clear() error {
 
 func (ed *EventDispatcher) Has(name string, handler EventHandlerInterface) bool {
 
-	for e, h := range ed.handlers {
-		if e == name {
-			for _, h2 := range h {
-				if h2 == handler {
-					return true
-				}
+	if handlers, ok := ed.handlers[name]; ok {
+		for _, h := range handlers {
+			if h == handler {
+				return true
 			}
 		}
 	}
 
 	return false
+}
+
+func (ed *EventDispatcher) Dispatch(event EventInterface) error {
+
+	if handlers, ok := ed.handlers[event.GetName()]; ok {
+		wg := &sync.WaitGroup{}
+		for _, h := range handlers {
+			wg.Add(1)
+			go h.Handle(event, wg)
+		}
+		wg.Wait() // wait for all handlers to finish
+	}
+
+	return nil
+}
+
+func (ed *EventDispatcher) Remove(name string, handler EventHandlerInterface) error {
+
+	if handlers, ok := ed.handlers[name]; ok {
+		for i, h := range handlers {
+			if h == handler {
+				ed.handlers[name] = append(handlers[:i], handlers[i+1:]...)
+				return nil
+			}
+		}
+	}
+
+	return nil
 }
