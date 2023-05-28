@@ -63,7 +63,7 @@ func (ed *EventDispatcher) Dispatch(event EventInterface) error {
 			wg.Add(1)
 			go h.Handle(event, wg)
 		}
-		wg.Wait() // wait for all handlers to finish
+		wg.Wait() //! wait for all handlers to finish
 	}
 
 	return nil
